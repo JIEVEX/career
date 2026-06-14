@@ -89,7 +89,7 @@ app.post("/auth/register", async (req, res) => {
     const userRef = db.collection("users").doc(username);
     const doc = await userRef.get();
 
-    if (doc.exists()) {
+    if (doc.exists) { 
       return res.status(400).json({ message: "Username sudah digunakan" });
     }
 
@@ -122,7 +122,8 @@ app.post("/auth/login", async (req, res) => {
     const userRef = db.collection("users").doc(username);
     const doc = await userRef.get();
 
-    if (!doc.exists) {
+    const userData = doc.data();
+    if (userData.password !== password) {
       return res.status(401).json({ message: "Username atau password salah" });
     }
 
