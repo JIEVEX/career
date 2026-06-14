@@ -103,7 +103,58 @@ app.get("/meta", (req, res) => {
   });
 });
 
+// 1. Ambil Semua Data Karir (Menyelesaikan Error 404 /careers)
+app.get("/careers", async (req, res) => {
+  try {
+    const snapshot = await db.collection("careers").get();
+    const careersList = [];
+    snapshot.forEach(doc => {
+      careersList.push({ id: doc.id, ...doc.data() });
+    });
+    res.json(careersList);
+  } catch (error) {
+    res.status(500).json({ message: "Gagal mengambil data karir", error: error.message });
+  }
+});
+
+// 2. Simpan Hasil Tes Kuesioner (Dibutuhkan oleh App.tsx Anda)
+app.post("/user/test", async (req, res) => {
+  try {
+    const { skills, interests } = req.body;
+    // Catatan: Karena belum memakai session kuki, kita pakai placeholder sementara atau sesuaikan dengan arsitektur Anda
+    const userId = "admin"; // Sesuai data dummy sementara atau kirim id dari frontend
+    
+    await db.collection("users").doc(userId).update({
+      testAnswers: { skills, interests },
+      completedAt: new Date().toISOString()
+    });
+    
+    const updatedUser = await db.collection("users").doc(userId).get();
+    res.json({ message: "Test berhasil disimpan", data: updatedUser.data() });
+  } catch (error) {
+    res.status(500).json({ message: "Gagal menyimpan test", error: error.message });
+  }
+});
+
+// TAMBAHKAN ENDPOINT INI DI SERVER.JS (DI ATAS module.exports = app)
+app.get("/careers", async (req, res) => {
+  try {
+    const snapshot = await db.collection("careers").get();
+    const careersList = [];
+    snapshot.forEach(doc => {
+      careersList.push({ id: doc.id, ...doc.data() });
+    });
+    res.json(careersList);
+  } catch (error) {
+    res.status(500).json({ message: "Gagal mengambil data karir", error: error.message });
+  }
+});
 // ==========================================
 // JALUR EKSPOR KHUSUS VERCEL (TIDAK PAKAI FIREBASE ONREQUEST / APP.LISTEN)
 // ==========================================
 module.exports = app;
+// Tambahkan ini di paling bawah server.js
+if (process.env.NODE_ENV !== 'production') {
+  const PORT = 5000;
+  app.listen(PORT, () => console.log(`Backend lokal berjalan di http://localhost:${PORT}`));
+}
