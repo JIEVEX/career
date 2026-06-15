@@ -53,9 +53,9 @@ app.use((req, res, next) => {
 
 app.get("/meta", (req, res) => {
   res.json({
-    skills: [{ id: "s1", name: "Programming" }, { id: "s2", name: "Design" }, { id: "s3", name: "Writing" }],
-    interests: [{ id: "i1", name: "Technology" }, { id: "i2", name: "Art" }, { id: "i3", name: "Business" }],
-    locations: [{ id: "l1", name: "Jakarta" }, { id: "l2", name: "Bandung" }, { id: "l3", name: "Surabaya" }]
+    skills: [{ id: "s1", name: "Programming" }, { id: "s2", name: "Design" }, { id: "s3", name: "Writing" }, {id: "s4", name: "Logika Pemrograman"}, { id: 's5', name: 'Analisis Data' }, { id: 's5', name: 'Komunikasi Publik' }, { id: 's6', name: 'Manajemen Proyek' }],
+    interests: [{ id:  "i1", name: "Technology" }, { id: "i2", name: "Art" }, { id: "i3", name: "Business" }, { id: 'i4', name: 'Sosial & Edukasi' }],
+    locations: [{ id: "l1", name: "Jakarta" }, { id: "l2", name: "Bandung" }, { id: "l3", name: "Surabaya" }, {id: "l4", name: "Depok"}]
   });
 });
 
@@ -90,6 +90,7 @@ app.post("/auth/register", async (req, res) => {
     const newUser = {
       id: username,
       username,
+      name: req.body.name || username.split('@')[0],
       password,
       role: role || "user",
       testAnswers: { skills: {}, interests: {} }
