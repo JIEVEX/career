@@ -10,9 +10,9 @@ const appId = 'career-rec-ts-001';
 // 1. PENGATURAN CORS & PARSER (Hanya satu konfigurasi yang spesifik)
 app.use(cors({
   origin: [
-    'https://career-1d668.web.app',         // Domain Firebase Anda
+    'https://career-1d668.web.app',         
     'https://career-1d668.firebaseapp.com',
-    'http://localhost:5173'                 // Untuk testing lokal (Vite)
+    'http://localhost:5173'                
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
@@ -20,7 +20,7 @@ app.use(cors({
 
 app.use(express.json());
 
-// 2. Inisialisasi Firebase dengan Blok Try-Catch yang Aman
+// 2. Inisialisasi Firebase dengan Blok Try-Catch 
 let db;
 try {
   if (!admin.apps.length) {
@@ -66,9 +66,6 @@ const checkAuth = async (req, res, next) => {
   }
   const token = authHeader.split('Bearer ')[1];
   try {
-    // Jika Anda menggunakan Firebase Auth asli di frontend:
-    // const decodedToken = await admin.auth().verifyIdToken(token);
-    // req.firebaseUser = decodedToken;
     
     // BACKUP SIMULASI: Agar bypass token tiruan dari Login.tsx versi cepat
     if (token.length > 15) {
@@ -94,7 +91,7 @@ const checkAdmin = (req, res, next) => {
 };
 
 // ==========================================
-// BARU: ENDPOINT AUTENTIKASI (Pemberantas Error 404 Login)
+// ENDPOINT AUTENTIKASI 
 // ==========================================
 
 app.post("/api/auth/register", async (req, res) => {
@@ -130,20 +127,9 @@ app.post("/api/auth/login", async (req, res) => {
     const docSnap = await userProfileRef.get();
 
     if (docSnap.exists) {
-      res.json({ message: "Login Berhasil", user: docSnap.data() });
+      res.status(200).json({ message: "Login Berhasil", user: docSnap.data() });
     } else {
-      // Jika user belum terdaftar di DB, otomatis buatkan (Auto-Register demi kemudahan testing)
-      const newProfile = {
-        id: generatedUid,
-        username: username,
-        name: username.split('@')[0],
-        email: username,
-        role: username === 'admin@karirku.com' ? 'admin' : 'user',
-        testAnswers: { skills: {}, interests: {} },
-        completedAt: null
-      };
-      await userProfileRef.set(newProfile);
-      res.json({ message: "Login Berhasil (Akun Otomatis Dibuat)", user: newProfile });
+      res.status(404).json({ message: "Email belum terdaftar. Silakan registrasi terlebih dahulu!" });
     }
   } catch (error) {
     res.status(500).json({ message: "Proses login gagal", error: error.message });
@@ -287,6 +273,121 @@ app.delete("/api/admin/careers/:id", checkAuth, checkAdmin, async (req, res) => 
     res.json({ message: "Data karir berhasil dihapus oleh admin" });
   } catch (error) {
     res.status(500).json({ message: "Admin gagal menghapus data karir", error: error.message });
+  }
+});
+
+// ==========================================
+// ENDPOINT ADMIN: PENGELOLAAN DATA USER (CRUD)
+// ==========================================
+
+// 1. READ: Ambil Semua Data Profil User (Daftar Pengguna)
+app.get("/api/admin/users", checkAuth, checkAdmin, async (req, res) => {
+  try {
+    // Mengambil semua dokumen profil dari sub-collection 'profile' lewat Group Collection Query 
+    // atau mengambil dokumen induk jika terstruktur. 
+    // Namun karena struktur Firestore Anda bertingkat, kita bisa melakukan scan dokumen user:
+    const usersRef = db.collection('artifacts').doc(appId).collection('users');
+    const usersSnap = await usersRef.get();
+    
+    const userList = [];
+    
+    // Looping setiap folder user untuk mengambil dokumen 'data' di dalam sub-collection 'profile'
+    for (const userDoc of usersSnap.docs) {
+      const profileDoc = await usersRef.doc(userDoc.id).collection('profile').doc('data').get();
+      if (profileDoc.exists) {
+        userList.push(profileDoc.data());
+      }
+    }
+
+    res.status(200).json({
+      message: "Berhasil memuat daftar seluruh pengguna",
+      users: userList
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Admin gagal memuat data user", error: error.message });
+  }
+});
+
+// 2. CREATE: Admin Membuat User Baru Secara Manual
+app.post("/api/admin/users", checkAuth, checkAdmin, async (req, res) => {
+  try {
+    const { username, password, name, role } = req.body;
+    
+    if (!username) {
+      return res.status(400).json({ message: "Email/Username wajib diisi" });
+    }
+
+    const generatedUid = btoa(username).substring(0, 10);
+    const userProfileRef = db.collection('artifacts').doc(appId).collection('users').doc(generatedUid).collection('profile').doc('data');
+    
+    // Cek apakah user sudah terdaftar sebelumnya
+    const docSnap = await userProfileRef.get();
+    if (docSnap.exists) {
+      return res.status(400).json({ message: "User dengan email tersebut sudah ada di sistem." });
+    }
+
+    const newUserProfile = {
+      id: generatedUid,
+      username: username,
+      name: name || username.split('@')[0],
+      email: username,
+      role: role || "user", // Admin bisa menentukan apakah akun baru ini 'admin' atau 'user'
+      testAnswers: { skills: {}, interests: {} },
+      completedAt: null
+    };
+
+    await userProfileRef.set(newUserProfile);
+    res.status(201).json({ message: "User baru berhasil dibuat oleh Admin", user: newUserProfile });
+  } catch (error) {
+    res.status(500).json({ message: "Admin gagal membuat user baru", error: error.message });
+  }
+});
+
+// 3. UPDATE: Admin Mengubah Data Profil / Role User Berdasarkan ID User
+app.put("/api/admin/users/:id", checkAuth, checkAdmin, async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const { name, role, email } = req.body;
+
+    const userProfileRef = db.collection('artifacts').doc(appId).collection('users').doc(userId).collection('profile').doc('data');
+    const docSnap = await userProfileRef.get();
+
+    if (!docSnap.exists) {
+      return res.status(404).json({ message: "Data user tidak ditemukan" });
+    }
+
+    // Menyiapkan data yang diperbarui tanpa menghapus data jawaban kuesioner yang sudah ada
+    const updatedData = {
+      name: name || docSnap.data().name,
+      role: role || docSnap.data().role,
+      email: email || docSnap.data().email,
+    };
+
+    await userProfileRef.update(updatedData);
+    res.status(200).json({ message: "Data user berhasil diperbarui oleh Admin" });
+  } catch (error) {
+    res.status(500).json({ message: "Admin gagal memperbarui data user", error: error.message });
+  }
+});
+
+// 4. DELETE: Admin Menghapus Akun & Data Profil User Berdasarkan ID User
+app.delete("/api/admin/users/:id", checkAuth, checkAdmin, async (req, res) => {
+  try {
+    const userId = req.params.id;
+    
+    // Proteksi agar admin tidak sengaja menghapus dirinya sendiri
+    if (userId === btoa('admin@karirku.com').substring(0, 10)) {
+      return res.status(400).json({ message: "Aksi ditolak. Anda tidak bisa menghapus akun Admin Utama Anda sendiri!" });
+    }
+
+    const baseUserPath = db.collection('artifacts').doc(appId).collection('users').doc(userId);
+    
+    // Hapus dokumen profil di dalam sub-collection terlebih dahulu
+    await baseUserPath.collection('profile').doc('data').delete();
+    
+    res.status(200).json({ message: "Akun dan profil user berhasil dihapus dari sistem." });
+  } catch (error) {
+    res.status(500).json({ message: "Admin gagal menghapus data user", error: error.message });
   }
 });
 
