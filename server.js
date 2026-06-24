@@ -283,17 +283,14 @@ app.delete("/api/admin/careers/:id", checkAuth, checkAdmin, async (req, res) => 
 // 1. READ: Ambil Semua Data Profil User (Daftar Pengguna)
 app.get("/api/admin/users", checkAuth, checkAdmin, async (req, res) => {
   try {
-    // Mengambil semua dokumen profil dari sub-collection 'profile' lewat Group Collection Query 
-    // atau mengambil dokumen induk jika terstruktur. 
-    // Namun karena struktur Firestore Anda bertingkat, kita bisa melakukan scan dokumen user:
     const usersRef = db.collection('artifacts').doc(appId).collection('users');
-    const usersSnap = await usersRef.get();
+    const userDocRefs = await usersRef.listDocuments();
     
     const userList = [];
     
     // Looping setiap folder user untuk mengambil dokumen 'data' di dalam sub-collection 'profile'
-    for (const userDoc of usersSnap.docs) {
-      const profileDoc = await usersRef.doc(userDoc.id).collection('profile').doc('data').get();
+    for (const docRef of userDocRefs) {
+      const profileDoc = await docRef.collection('profile').doc('data').get();
       if (profileDoc.exists) {
         userList.push(profileDoc.data());
       }
